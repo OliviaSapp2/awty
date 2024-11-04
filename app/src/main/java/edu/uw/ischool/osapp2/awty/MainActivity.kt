@@ -1,11 +1,8 @@
 package edu.uw.ischool.osapp2.awty
 
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
+import android.os.Looper
+import android.os.Handler
 import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
@@ -15,6 +12,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
@@ -25,8 +24,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editTextMinutes: EditText
 
     private var isSending = false
-    private lateinit var alarmManager: AlarmManager
-    private lateinit var pendingIntent: PendingIntent
+
+    private val executor = Executors.newSingleThreadScheduledExecutor()
+    private val handler = Handler(Looper.getMainLooper())
+    private var task: Runnable? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -37,6 +39,7 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        //initialize UI elements
         startButton = findViewById(R.id.StartButton)
         startButton.isEnabled = false
         editTextMessage = findViewById(R.id.editTextMessage)
@@ -44,7 +47,6 @@ class MainActivity : AppCompatActivity() {
         editTextMinutes = findViewById(R.id.editTextMinutes)
 
         startButton.setOnClickListener{
-            //send toast messages every n minutes
             if(!isSending){
                 startSending()
             } else {
@@ -56,23 +58,19 @@ class MainActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
 
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
-                // this function is called when text is edited
                 checkFilled()
             }
 
             override fun afterTextChanged(s: Editable) {
             }
-
         }
 
         editTextMessage.addTextChangedListener(textWatcher)
         editTextPhoneNum.addTextChangedListener(textWatcher)
         editTextMinutes.addTextChangedListener(textWatcher)
-
-        alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    }
-
+}
     private fun checkFilled(){
+        //checks if all text editors are filled
         val messageVal = editTextMessage.text.toString().trim()
         val phoneVal = editTextPhoneNum.text.toString().trim()
         val minuteVal = editTextMinutes.text.toString().trim()
@@ -84,21 +82,32 @@ class MainActivity : AppCompatActivity() {
         val n = editTextMinutes.text.toString().toInt()
         val intervalMin = n * 60 * 1000L
 
-        val message = editTextMessage.text.toString()
-        val phoneNum = editTextPhoneNum.text.toString()
-        val toastStr = "$phoneNum: $message"
-
-        val toast = Toast.makeText(this, toastStr, Toast.LENGTH_LONG)
-        toast.show()
+        //sends the toast every n minutes
+        task = Runnable {
+            val phoneNum = editTextPhoneNum.text.toString()
+            val message = editTextMessage.text.toString()
+            handler.post {
+                Toast.makeText(this, "$phoneNum: $message", Toast.LENGTH_LONG).show()
+            }
+        }
+        executor.scheduleWithFixedDelay(task, 0, intervalMin, TimeUnit.MILLISECONDS)
 
         startButton.text = "Stop"
         isSending = true
     }
 
-    private fun stopSending(){
-        alarmManager.cancel(pendingIntent)
+    private fun stopSending() {
+        task?.let {
+            executor.shutdownNow()
+            task = null
+        }
         startButton.text = "Start"
         isSending = false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopSending()
     }
 
 }
