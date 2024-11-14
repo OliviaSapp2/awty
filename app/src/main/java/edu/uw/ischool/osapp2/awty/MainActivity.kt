@@ -7,14 +7,13 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.widget.Button
 import android.widget.EditText
-import android.widget.Toast
+import android.telephony.SmsManager
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,7 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     private var isSending = false
 
-    private val executor = Executors.newSingleThreadScheduledExecutor()
+    private var executor = Executors.newSingleThreadScheduledExecutor()
     private val handler = Handler(Looper.getMainLooper())
     private var task: Runnable? = null
 
@@ -54,15 +53,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        var textWatcher: TextWatcher = object : TextWatcher {
+        val textWatcher: TextWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
 
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {
                 checkFilled()
             }
 
-            override fun afterTextChanged(s: Editable) {
-            }
+            override fun afterTextChanged(s: Editable) {}
         }
 
         editTextMessage.addTextChangedListener(textWatcher)
@@ -79,15 +77,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startSending(){
+        //makes new executor because executor get destroyed in stopSending
+        if (executor.isShutdown) {
+            executor = Executors.newSingleThreadScheduledExecutor()
+        }
+
         val n = editTextMinutes.text.toString().toInt()
         val intervalMin = n * 60 * 1000L
 
-        //sends the toast every n minutes
+        //sends the sms every n minutes
         task = Runnable {
             val phoneNum = editTextPhoneNum.text.toString()
             val message = editTextMessage.text.toString()
             handler.post {
-                Toast.makeText(this, "$phoneNum: $message", Toast.LENGTH_LONG).show()
+                try {
+                    val sendText = SmsManager.getDefault()
+                    sendText.sendTextMessage(phoneNum, null, message, null, null)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
         executor.scheduleWithFixedDelay(task, 0, intervalMin, TimeUnit.MILLISECONDS)
